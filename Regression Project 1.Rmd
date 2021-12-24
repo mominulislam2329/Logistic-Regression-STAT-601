@@ -1,0 +1,787 @@
+---
+title: "Project 3"
+author: "Md Mominul Islam"
+date: '`r Sys.Date()`'
+output:
+  pdf_document: default
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message=F,warning=F,echo=F,fig_height=10,fig_width=7,cache = F)
+```
+
+## Project 
+
+
+### Project Summary
+
+
+In our project we have developed a logistic regression model with 46 \textbf{\textit{Subterranious}} samples, 
+43 \textbf{\textit{Multiplex}} samples and the 199 \textbf{\textit{Unknown}} samples.Initially we have done 
+formatting and cleaning of our given data set which were subdivided into three csv files and then we did some 
+common exploratory data analysis like pairs plot, scatterplot, boxplot, density plot, correlation analysis between 
+numeric variables etc. From our exploratory data analysis, we have drawn several conclusions about the symmetry, 
+skewness and distribution of our 3 separate data set of Multiplex, subterranious and unknown species. After that, 
+we Prepared a two preliminary models with two and three variables using generalized linear regression model. 
+From our generalized linear model, We can see that the coefficients of Vole Skull Height (Scale of 0.01 mm) and Vole Skull Weight (Scale of 0.01 mm) 
+are significant (p < 0.05), while the coefficient of Vole Skull Length (Scale of 0.01 mm) is non-significant 
+considering three variables. Our model with 2 variables has AIC of 60.4188 and model with three 
+variables has the smallest AIC(56.87). So based on AIC, we have selected the model with the lowest AIC.
+Using the p-value in the ANOVA output, we rejected the null 
+hypothesis as the p-value was less than the significance level and 
+concluded that at least two of the species parameters are different from each other. Also we have done QQ plotting of our regression model 
+and saw that the the data was normally distributed for our model except some outliers like 24,241 and 271.After 
+moidelling we have done cross-validation for the models and checked model accuracy. Our cross validation showed that the 
+full model and the model based of width and height are effectively the same for the LOOCV. Furthermore, the model with just  Vole Skull Width and Vole Skull Height ("WH") is better than the 
+models with Vole Skull Length in the model. Lastly, we have predicted for the unknown species. out of 197 unknown samples, there are 
+82 multiplex data and 115 subterranious data. The error rate of our model is 58.37%. .
+
+
+**Develop a Logistic regression model from the 89 specimens that you can use to predict the group membership of the remaining 199 specimens.**
+
+**Methodology**
+        
+- For this project, the data set is imported from the \textbf{\textit{Skull Data Work}} as \textbf{\textit{skull.data}}. For our convenience we have saved a copy of the original data and did our analysis on work data set.Then, we looked at the raw data and have an overall idea about the dataset like presence of potential outliers or typos. In real world, it is better to contact the researchers about these data points.
+
+- There are 46 \textbf{\textit{Subterranious}} samples and 43 \textbf{\textit{Multiplex}} samples and the remaining 199 samples are \textbf{\textit{Unknown}}. It is apparent that this is a classification problem with a binary outcome. In this project we are asked to develop a logistic regression model from the 89 specimens that we can use to predict the group membership of the remaining 199 specimens.Hence, we are going to develop a logistic regression model using the \textbf{\textit{glm}} function in base R.
+
+- Firstly, we have done some common exploratory data analysis like pairs plot, scatterplot, boxplot, density plot, correlation analysis between numeric variables etc. After that, we Prepared a preliminary model like logistic regression or linear regression model. After moidelling we have done cross-validation for the models and checked model accuracy.  At the end, we compared different models and chose the one with the highest accuracy.Finally, With the finalized model we have done some visualizations and used the model to make predictions.
+
+
+**Assumptions**
+
+The following assumptions are made in the process of a building binomial logistic regression model:
+    
+* Dependent variable is binary or discrete.
+    
+* The observations must be independent of each other.
+      
+* Continuous explanatory variables follow normal Gaussian distribution.
+      
+* A linear relationship exists between the independent explanatory variables and the logit output
+      
+* No outliers that exert undue influence on the model.
+      
+* No troublesome multicollinearity among the independent variables.
+
+\newpage
+
+**Data Exploration Methodology**
+
+### Notes on xlxs file
+
+We quickly visualized the xlxs file. In the given file, We have 3 sheets of data.
+
+#### First Sheet: Unknown data
+
+By looking at the \textbf{\textit{Unknown Data}}, we summarized few points
+
+- A skipped row between vole skulls 20 and 21.
+
+- Looks like vole skull width at 10th row maybe a typo.
+
+#### Second Sheet: Subterraneous Vole Skulls
+
+By looking at the \textbf{\textit{Subterraneous vole skulls Data}}, we summarized few points
+
+- Vole skull typo on width at 2nd row.
+
+- Vole skull typo on length at 13th row.
+
+- Vole skull typo on height at 33rd row.
+
+### Third Sheet : Multiplex Vole Skulls
+
+By looking at the \textbf{\textit{Multiplex Vole Skulls Data}}, we summarized few points
+
+- Typo on vole skull height at 8th row
+
+- Typo on vole skull length at 39th row.
+
+- Looks like 29 and 30 may be a stutter or the same skull entered twice.
+
+**1. Format the data contained in the excel spreadsheet for use in R.**
+
+**2. Perform an exploratory data analysis.**
+
+### Loading Data Set in R
+
+```{r libraries, echo = FALSE}
+library(readxl)
+library(knitr)
+library(reshape)
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(GGally)
+library(car)
+library(boot)
+library(gridExtra)
+library(MASS)
+library(pROC)
+library("PerformanceAnalytics")
+library(AppliedPredictiveModeling)
+library(rpart)
+library(partykit)
+library(ggdendro)
+library(randomForest)
+```
+
+We have made three csv files out of the xlxs file and named them as \textbf{\textit{multi.csv, sub.csv and unknown.csv}}. We have loaded these three csv files and named them dat.m, dat.s and dat.u respectively.
+
+```{r, echo=FALSE}
+#dat.m is the multi species
+dat.m <- read.csv("/Users/md.mominul.islam/OneDrive - South Dakota State University - SDSU/STAT 601/Project 1/Dr Saunders Solution/multi.csv", stringsAsFactors = F)
+
+#dat.s is the subterraneous species
+dat.s <- read.csv("/Users/md.mominul.islam/OneDrive - South Dakota State University - SDSU/STAT 601/Project 1/Dr Saunders Solution/sub.csv", stringsAsFactors = F)
+
+#dat.u is the unknown species
+dat.u <- read.csv("/Users/md.mominul.islam/OneDrive - South Dakota State University - SDSU/STAT 601/Project 1/Dr Saunders Solution/unknown.csv", stringsAsFactors = F)
+```
+
+## Formatting and Cleaning Multiplex data (dat.m)
+
+
+```{r, echo=FALSE, results='hide'}
+is.na(dat.m[,1]) #Checking missing values
+dat.m.fin = dat.m[-34,] # deleting entire rows with missing values
+#Rename the columns
+colnames(dat.m.fin)
+colnames(dat.m.fin) = c("Skull.Index",
+                        "Species",
+                        "Length",
+                        "Height",
+                        "Width")
+cbind(1:44, dat.m.fin) # Actual Indexing
+dat.m.fin = dat.m.fin[c(-8,-29,-40),]
+```
+We have removed typos at 8th and 39th row. We have kept 29th row so our double entry problem is solved as well.
+
+```{r, echo=FALSE}
+kable(head(dat.m.fin),
+      caption = "First 6 Rows of Multiplex data")
+cat('Multiplex data has', dim(dat.m.fin)[1], 'rows and', dim(dat.m.fin)[2], 'columns.')
+```
+
+### Summary Statistics of Numeric Variables of Multiplex data
+
+```{r, echo=FALSE}
+kable(summary(dat.m.fin[c("Length", "Height","Width")]),
+      caption = "Summary Statistics of Numeric Variables of Multiplex data")
+```
+
+Measures of central tendency are a class of statistics used to identify a value that falls in the middle of a set of data. From our summary statistic for the numeric variables, we can say that 
+
+- Average value of length suggests that typical length for the multiplex species would go around 2386 (Scale of 0.01 mm) and we can also say that data is symmetrical as mean (2386) and median (2370) values for the length column in multiplex data are close.
+
+- Average value of height suggests that typical height for the multiplex species would go around 809 (Scale of 0.01 mm) and we can also say that data is symmetrical as mean (809) and median (805) values for the height column in multiplex data are close.
+
+- Average value of width suggests that typical width for the multiplex species would go around 466.3 (Scale of 0.01 mm) and we can also say that data is symmetrical as mean (466.3) and median (465) values for the width column in multiplex data are close.
+
+### Individual Boxplot for Multiplex Species
+
+```{r, echo=FALSE, fig.cap = "Boxplot for Multiplex Species"}
+par(mfrow=c(1,3),mar = c(3, 3, 2, 1))
+#Individual Boxplot
+boxplot(dat.m.fin[,3],
+        main = "Multiplex Species by Length",
+        ylab = "Skull Length(0.01mm)")
+boxplot(dat.m.fin[,4],
+        main = "Multiplex Species by Height",
+        ylab = "Skull Height(0.01mm)")
+boxplot(dat.m.fin[,5],
+        main = "Multiplex Species by Width",
+        ylab = "Skull Width (0.01mm)")
+```
+We know that boxplot gives us a good indication of how the values in the data are spread out. The boxplot displays the center and spread of a numeric variable in a format that allows us to quickly obtain a sense of the range and skew of a variable, or compare it to other variables.
+
+- From the boxplot depicted above, we can see some outliers (identified by asterisks (*)) in height and width column. 
+
+- The length and height data for Multiplex Species are skewed to the right as the longer part of the box are to the right (or above) the median.
+
+- But, we can say that data is symmetric in case of width for Multiplex Species.
+
+\newpage
+
+### Individual Histogram for Multiplex Species
+
+```{r, echo=FALSE,fig.cap = "Histogram for Multiplex Species" }
+par(mfrow=c(1,3),mar = c(3, 3, 2, 1))
+#Individual histogram
+hist(dat.m.fin[,3],
+        main = "Multiplex Species by Length",
+        ylab = "Skull Length(0.01mm)")
+hist(dat.m.fin[,4],
+        main = "Multiplex Species by Height",
+        ylab = "Skull Height(0.01mm)")
+hist(dat.m.fin[,5],
+        main = "Multiplex Species by Width",
+        ylab = "Skull Width (0.01mm)")
+```
+
+From the histogram, we can say that:
+
+- For the histogram of the length of multiplex species, the shape looks like symmetrical except some outliers at the beginning.
+
+- The shape is right skewed for height of the multiplex species. It has a peak that is left of center. This is a unimodal data set, with the mode closer to the left of the graph and smaller than either the mean or the median. The mean (809) of right-skewed data is located to the right side of the graph and greater value than the median (805). This shape indicates that there are a number of data points, perhaps outliers, that are greater than the mode.
+
+- The shape is symmetrical for width of the multiplex species. So we can tell that the mean, median, and mode are all the same value.Also a normally distributed data set except an outlier at the end creates a symmetric histogram that looks like a bell, leading to the common term for a normal distribution: a bell curve.
+
+\newpage
+
+### Pairs Plot for Multiplex Species
+
+```{r,echo=FALSE, fig.cap = "Pairs Plot for Multiplex Species"}
+#Pairs plot
+panel.cor <- function(x, y, digits=2, prefix="", cex.cor, ...) {
+usr <- par("usr")
+on.exit(par(usr))
+par(usr = c(0, 1, 0, 1))
+r <- abs(cor(x, y, use="complete.obs"))
+txt <- format(c(r, 0.123456789), digits=digits)[1]
+txt <- paste(prefix, txt, sep="")
+if(missing(cex.cor)) cex.cor <- 0.8/strwidth(txt)
+text(0.5, 0.5, txt, cex = cex.cor * (1 + r) / 2)
+}
+
+pairs(dat.m.fin[,3:5], 
+      upper.panel = panel.cor,
+      pch = 18,
+      main = "Base R: Pairs Plot for Multiplex Species Parameters")
+
+#Correlation Matrix
+kable(cor(dat.m.fin[,3:5]),
+      caption = "Correlation Matrix for Multiplex Data ")
+
+```
+
+All other boxes display a scatterplot of the relationship between each pairwise combination of variables. 
+
+- The box in the left right corner of the matrix displays a scatterplot of values for length and width. The box in the middle left displays a scatterplot of values for Length and Height, and so on.
+
+- This single plot gives us an idea of the relationship between each pair of variables in our dataset. For example, parameter Length and width seem to be positively correlated with a value of 0.70.
+
+
+### Density Plot for Multiplex Species
+
+```{r,echo=FALSE,fig.cap = "Desnity Plot for Multiplex Species"}
+#Density Plot
+par(mfrow=c(1,3),mar = c(3, 3, 2, 1))
+plot(density(dat.m.fin[,3]),
+     main = "Multiplex Species by Length")
+rug(dat.m.fin[,3])
+
+plot(density(dat.m.fin[,4]),
+     main = "Multiplex Species by Height")
+rug(dat.m.fin[,4])
+
+plot(density(dat.m.fin[,5]),
+     main = "Multiplex Species by Width")
+rug(dat.m.fin[,5])
+```
+
+Density plots are used to observe the distribution of a variable in a dataset. It plots the graph on a continuous interval or time-period. This is also known as Kernel density plot. A density curve gives us a good idea of the “shape” of a distribution, including whether or not a distribution has one or more “peaks” of frequently occurring values and whether or not the distribution is skewed to the left or the right.
+
+- For length of multiplex species, density curve is right skewed, then the mean is greater than the median.
+
+- For height of multiplex species, density curve is right skewed, then the mean is greater than the median.
+
+- For width of multiplex species, density curve has no skew, then the mean is equal to the median.
+
+\newpage
+
+## Formatting and Cleaning Subterraneous data (dat.s)
+
+
+```{r, echo=FALSE, results='hide'}
+head(dat.s)
+#Rename the columns
+colnames(dat.s)
+colnames(dat.s) = c("Skull.Index",
+                        "Species",
+                        "Length",
+                        "Height",
+                        "Width")
+which(is.na(dat.s[,1])) #Checking missing values and looks like 13th row is missing
+dat.s.fin = dat.s[-13,] # deleting entire rows with missing values
+dat.s.fin = dat.s.fin[-13,] #Fixing vole skull 13 typo length
+dat.s.fin = dat.s.fin[-32,] #Fixing Vole skull 33
+dat.s.fin = dat.s.fin[-2,] #Fixing vole skull 2 typo length
+```
+
+
+By formatting our subterranious data, we got rid of missing values and typos.
+
+- Firstly, we have checked missing values and found missing values at 13th row. We removed the entire row.
+
+- We have removed typos at 2nd and 13th row and also fixed vole skull 33.
+
+
+```{r, echo=FALSE}
+kable(head(dat.s.fin),
+      caption = "First 6 Rows of Subterranious data")
+cat('Subterranious data has', dim(dat.s.fin)[1], 'rows and', dim(dat.s.fin)[2], 'columns.')
+```
+
+### Summary Statistics of Numeric Variables of Subterranious data
+
+```{r, echo=FALSE}
+kable(summary(dat.s.fin[c("Length", "Height","Width")]),
+      caption = "Summary Statistics of Numeric Variables of Subterranious data")
+```
+
+
+From our summary statistic for the numeric variables, we can say that 
+
+- Average value of length suggests that typical length for the subterranious species would go around 2227 (Scale of 0.01 mm) and we can also say that data is symmetrical as mean (2227) and median (2250) values for the length column in subterranious data are close.
+
+- Average value of height suggests that typical height for the subterranious species would go around 757.7 (Scale of 0.01 mm) and we can also say that data is symmetrical as mean (757.7) and median (750) values for the height column in subterranious data are close.
+
+- Average value of width suggests that typical width for the subterranious species would go around 426.8 (Scale of 0.01 mm) and we can also say that data is symmetrical as mean (426.8) and median (425) values for the width column in subterranious data are close.
+
+
+### Individual Boxplot for Subterranious Species
+
+
+```{r, echo=FALSE, fig.cap = "Boxplot for Subterranious Species"}
+par(mfrow=c(1,3),mar = c(3, 3, 2, 1))
+#Individual Boxplot
+boxplot(dat.s.fin[,3],
+        main = "Vole Skull Length",
+        ylab = "Skull Length(0.01mm)")
+boxplot(dat.s.fin[,4],
+        main = "Vole Skull Height",
+        ylab = "Skull Height(0.01mm)")
+boxplot(dat.s.fin[,5],
+        main = "Vole Skull Width",
+        ylab = "Skull Width (0.01mm)")
+```
+
+From the boxplot depicted above, we can see an outlier (identified by asterisks (*)) in width column. 
+
+- The length data for subterranious Species are skewed to the left as the longer part of the box are to the left to the median.
+
+- The height data for subterranious Species are skewed to the right as the longer part of the box are to the right (or above) the median.
+
+- But, we can say that data is symmetric in case of width for subterranious Species.
+
+
+
+### Individual Histogram for Subterranious Species
+
+```{r, echo=FALSE,fig.cap = "Histogram for Subterranious Species" }
+par(mfrow=c(1,3),mar = c(3, 3, 2, 1))
+#Individual histogram
+hist(dat.s.fin[,3],
+        main = "Vole Skull Length",
+        ylab = "Skull Length(0.01mm)")
+hist(dat.s.fin[,4],
+        main = "Vole Skull Height",
+        ylab = "Skull Height(0.01mm)")
+hist(dat.s.fin[,5],
+        main = "Vole Skull Width",
+        ylab = "Skull Width (0.01mm)")
+```
+
+From the histogram, we can say that:
+
+- The shape is left skewed for length of the subterranious species. It has a peak that is right of center. This is a unimodal data set, with the mode closer to the right of the graph and smaller than either the mean or the median. The mean (2227) of skewed data is located to the right side of the graph and smaller value than the median (2250). 
+
+- The shape is right skewed for height of the subterranious species. It has a peak that is left of center. This is a unimodal data set,the mean (757.7) of skewed data is located to the left side of the graph and greater value than the median (750). 
+
+- For the histogram of the width of subterranious species, the shape looks like symmetrical except some outliers at the end.
+
+
+### Pairs Plot for Subterranious Species
+
+```{r,echo=FALSE, fig.cap = "Pairs Plot for Subterranious Species"}
+#Pairs plot
+
+panel.cor <- function(x, y, digits=2, prefix="", cex.cor, ...) {
+usr <- par("usr")
+on.exit(par(usr))
+par(usr = c(0, 1, 0, 1))
+r <- abs(cor(x, y, use="complete.obs"))
+txt <- format(c(r, 0.123456789), digits=digits)[1]
+txt <- paste(prefix, txt, sep="")
+if(missing(cex.cor)) cex.cor <- 0.8/strwidth(txt)
+text(0.5, 0.5, txt, cex = cex.cor * (1 + r) / 2)
+}
+
+pairs(dat.s.fin[,3:5], 
+      upper.panel = panel.cor,
+      pch = 18,
+      main = "Base R: Pairs Plot for Subterranious Species Parameters")
+
+#Correlation Matrix
+kable(cor(dat.s.fin[,3:5]),
+      caption = "Correlation Matrix for Subterranious Data ")
+
+```
+
+All other boxes display a scatterplot of the relationship between each pairwise combination of variables. 
+
+- The box in the left right corner of the matrix displays a scatterplot of values for length and width. The box in the middle left displays a scatterplot of values for Length and Height, and so on.
+
+- This single plot gives us an idea of the relationship between each pair of variables in our dataset. For example, parameter Length and width seem to be positively correlated with a value of 0.76.
+
+
+### Density Plot for Subterranious Species
+
+
+```{r,echo=FALSE,fig.cap = "Desnity Plot for Subterranious Species"}
+#Density Plot
+par(mfrow=c(1,3),mar = c(3, 3, 2, 1))
+plot(density(dat.s.fin[,3]),
+     main = "Subterranious Species by Length")
+rug(dat.s.fin[,3])
+
+plot(density(dat.s.fin[,4]),
+     main = "Subterranious Species by Height")
+rug(dat.s.fin[,4])
+
+plot(density(dat.s.fin[,5]),
+     main = "Subterranious Species by Width")
+rug(dat.s.fin[,5])
+```
+
+Density curve gives us a good idea of the “shape” of a distribution, including whether or not a distribution has one or more “peaks” of frequently occurring values and whether or not the distribution is skewed to the left or the right.
+
+- For length of subterranious species, density curve is left skewed, then the mean is smaller than the median.
+
+- For height of subterranious species, density curve is right skewed, then the mean is greater than the median.
+
+- For width of subterranious species, density curve has no skew, then the mean is equal to the median.
+
+\newpage
+
+## Formatting and Cleaning Unknwon data (dat.u)
+
+
+```{r, echo=FALSE, results='hide'}
+head(dat.u)
+#Rename the columns
+colnames(dat.u)
+colnames(dat.u) = c("Skull.Index",
+                        "Species",
+                        "Length",
+                        "Height",
+                        "Width")
+which(is.na(dat.u[,1])) #Checking missing values
+dat.u.fin = dat.u[c(-21,-7,-10),] # deleting entire rows with missing values and typos
+```
+
+By formatting our unknwon data, we got rid of missing values and typos.
+
+- Firstly, we have checked missing values and found missing values at 21th row. We removed the entire row.
+
+- We have removed typos at 7th and 10th row.
+
+
+```{r, echo=FALSE}
+kable(head(dat.u.fin),
+      caption = "First 6 Rows of Unknown data")
+cat('Unknwon data has', dim(dat.u.fin)[1], 'rows and', dim(dat.u.fin)[2], 'columns.')
+```
+
+### Summary Statistics of Numeric Variables of Unknown data
+
+```{r, echo=FALSE}
+kable(summary(dat.u.fin[c("Length", "Height","Width")]),
+      caption = "Summary Statistics of Numeric Variables of Unknown data")
+```
+
+From our summary statistic for the numeric variables, we can say that 
+
+- Average value of length suggests that typical length for the unknown species would go around 2419 (Scale of 0.01 mm) and we can also say that data is symmetrical as mean (2419) and median (2320) values for the length column in unknown data are close.
+
+- Average value of height suggests that typical height for the unknown species would go around 794.6 (Scale of 0.01 mm) and we can also say that data is symmetrical as mean (794.6) and median (790) values for the height column in unknown data are close.
+
+- Average value of width suggests that typical width for the unknown species would go around 452.9 (Scale of 0.01 mm) and we can also say that data is symmetrical as mean (452.9) and median (453) values for the width column in unknown data are close.
+
+
+
+### Individual Boxplot for Unknown Species
+
+
+```{r, echo=FALSE, fig.cap = "Boxplot for Unknown Species"}
+par(mfrow=c(1,3),mar = c(3, 3, 2, 1))
+#Individual Boxplot
+boxplot(dat.u.fin[,3],
+        main = "Unknown Species by Length",
+        ylab = "Skull Length(0.01mm)",
+        ylim=c(1500,3000))
+boxplot(dat.u.fin[,4],
+        main = "Unknown Species by Height",
+        ylab = "Skull Height(0.01mm)")
+boxplot(dat.u.fin[,5],
+        main = "Unknown Species by Width",
+        ylab = "Skull Width (0.01mm)")
+```
+
+From the boxplot depicted above, we can see outliers (identified by asterisks (*)) in length column of the unknown species. 
+
+- We can say that data is symmetric in case of height and width for unknown Species.
+
+### Individual Histogram for Unknown Species
+
+```{r, echo=FALSE,fig.cap = "Histogram for Unknown Species" }
+par(mfrow=c(1,3),mar = c(3, 3, 2, 1))
+#Individual histogram
+hist(dat.u.fin[,3],
+        main = "Unknown Species by Length",
+        ylab = "Skull Length(0.01mm)")
+hist(dat.u.fin[,4],
+        main = "Unknown Species by Height",
+        ylab = "Skull Height(0.01mm)")
+hist(dat.u.fin[,5],
+        main = "Unknown Species by Width",
+        ylab = "Skull Width (0.01mm)")
+```
+From the histogram, we can say that:
+
+- The shape of length is undefined.
+
+- For the histogram of the height and width of unknown species, the shape looks like symmetrical.
+
+### Pairs Plot for Unknown Species
+
+```{r,echo=FALSE, fig.cap = "Pairs Plot for Unknown Species"}
+#Pairs plot
+
+panel.cor <- function(x, y, digits=2, prefix="", cex.cor, ...) {
+usr <- par("usr")
+on.exit(par(usr))
+par(usr = c(0, 1, 0, 1))
+r <- abs(cor(x, y, use="complete.obs"))
+txt <- format(c(r, 0.123456789), digits=digits)[1]
+txt <- paste(prefix, txt, sep="")
+if(missing(cex.cor)) cex.cor <- 0.8/strwidth(txt)
+text(0.5, 0.5, txt, cex = cex.cor * (1 + r) / 2)
+}
+
+pairs(dat.u.fin[,3:5], 
+      upper.panel = panel.cor,
+      pch = 18,
+      main = "Base R: Pairs Plot for Unknown Species Parameters")
+
+#Correlation Matrix
+kable(cor(dat.u.fin[,3:5]),
+      caption = "Correlation Matrix for Unknown Data ")
+
+```
+
+All other boxes display a scatterplot of the relationship between each pairwise combination of variables. 
+
+- From the correlation matrix, we can say that Length and height of unknown species are weakly correlated with a value of 0.11.
+
+- Parameter Length and width seem to be positively correlated with a value of 0.80.
+
+### Density Plot for Unknown Species
+
+```{r,echo=FALSE,fig.cap = "Desnity Plot for Unknown Species"}
+#Density Plot
+par(mfrow=c(1,3),mar = c(3, 3, 2, 1))
+plot(density(dat.u.fin[,3]),
+     main = "Unknown Species by Length")
+rug(dat.u.fin[,3])
+
+plot(density(dat.u.fin[,4]),
+     main = "Unknown Species by Height")
+rug(dat.u.fin[,4])
+
+plot(density(dat.u.fin[,5]),
+     main = "Unknown Species by Width")
+rug(dat.u.fin[,5])
+```
+Density curve gives us a good idea of the “shape” of a distribution, including whether or not a distribution has one or more “peaks” of frequently occurring values and whether or not the distribution is skewed to the left or the right.
+
+- For length of unknown species, density curve is narrower and extremely left skewed.
+
+- For height and width of unknown species, density curve has no skew, then it indicates that the mean is equal to the median.
+
+
+**3.	Explain your GLM and assess the quality of the fit with the classified observations.**
+
+***Answer**
+
+
+```{r}
+dat.trn <- rbind(dat.m.fin, dat.s.fin) #combining multiplex and subterranious dataset
+dat.trn$Species = as.factor(dat.trn$Species)
+#model2 with two variables
+Model2 <- glm(Species~Length+Height, data = dat.trn, family = binomial())
+kable(summary(Model2)$coefficients,
+      caption = "Summary of Linear model, Two Variables")
+#model3 with three variables
+Model3 <- glm(Species~Length+Height+Width, data = dat.trn, family = binomial())
+kable(summary(Model3)$coefficients,
+      caption = "Summary of Linear model, Three Variables")
+#Residual vs Fitted is useful 
+```
+
+From our generalized linear model, We can see that the coefficients of height and weight are significant (p < 0.05), while the coefficient of length is non-significant considering three variables.
+
+## AIC Comparison of Two Models
+
+```{r, echo = FALSE}
+kable(cbind("Model 1" = Model2$aic,
+            "Model 2" = Model3$aic),
+      caption = "AICs of the two models")
+```
+
+The Akaike Information Criterion (AIC) provides a method for assessing the quality of our model through comparison of related models. Much like adjusted R-squared, it’s intent is to prevent us from including irrelevant predictors.
+
+Our model with 2 variables has AIC of 60.4188 and model with three variables has the smallest AIC(56.87). So, we should select the model with the lowest AIC.
+
+## Analysis of Variance
+
+```{r}
+#testing all models against each other
+anova(Model2,Model3,test = 'LR')
+```
+
+Using the p-value in the ANOVA output, we can determine whether the differences between some of the means are statistically significant. As the p-value is less than the significance level, we reject the null hypothesis and conclude that at least two of the species parameters are different from each other. 
+
+
+### Deviance Residual of Model with Three Variables
+
+```{r}
+summary(residuals(Model3))
+```
+
+Since the median deviance residual is close to zero, this means that our model is not biased in one direction (i.e. the out come is neither over- nor underestimated).
+
+## Base R Regression Model Plotting
+
+```{r}
+par(mfrow=c(2,2),mar = c(3, 3, 2, 1))
+plot(Model3)
+```
+
+From normal Q-Q plot, we can tell either the data is normally distributed or not. If all the points plotted on the graph perfectly lies on a straight line then we can clearly say that this distribution is Normally distribution because it is evenly aligned with the standard normal variate which is the simple concept of Q-Q plot.
+
+- From our model, we can clearly see that the the data is normally distributed for our model except some outliers like 24,241 and 271.
+
+- We can also say that the two sets come from a population with the same distribution, as the points fall approximately along the reference line drawn at 45-degree angle. 
+
+- A residuals vs. leverage plot is a type of diagnostic plot that allows us to identify influential observations in a regression model.We can see that observation #24 and #241 lie closest to the border of Cook’s distance, but they don’t fall outside of the dashed line. This means there are not any influential points in our regression model.
+
+## Cross Validation of Model
+
+```{r}
+preds = NULL
+
+for(i in 1:84){
+  glm.mod.full.i=
+    glm(Species~Length+Height+Width, data = dat.trn[-i,], family = binomial())
+  glm.mod.lh.i =
+    glm(Species~Length+Height, data = dat.trn[-i,], family = binomial())
+  glm.mod.lw.i =
+    glm(Species~Length+Width, data = dat.trn[-i,], family = binomial())
+  glm.mod.wh.i=
+    glm(Species~Height+Width, data = dat.trn[-i,], family = binomial())
+  
+  preds =rbind(preds,
+               c(predict(glm.mod.full.i, dat.trn[i,], type = 'response'),
+                 predict(glm.mod.lh.i, dat.trn[i,], type = 'response'),
+                 predict(glm.mod.lw.i, dat.trn[i,], type = 'response'),
+                 predict(glm.mod.wh.i, dat.trn[i,], type = 'response'), dat.trn[i,2]))
+}
+
+colnames(preds) = c("Full", "LH", "LW", "WH","Actual")
+pairs(preds)
+
+plot(preds[,c(1,4)])
+abline(h= 0.5)
+abline(v = 0.5)
+
+```
+The above plot shows that the full model and the model based of width and height are effectively the same for the LOOCV. 
+
+```{r}
+#check out prediction
+xtabs.dat = preds
+xtabs.dat[,1:4]= (xtabs.dat[,1:4]> 0.5)+1
+#Creating Confusion Matrix
+xtabs(~Actual+LH, data = xtabs.dat)
+xtabs(~Actual+LW, data = xtabs.dat)
+xtabs(~Actual+WH, data = xtabs.dat)
+```
+This suggests that using the model with just "WH" is better than the models with length in the model.
+
+
+**5.	Provide predictions for the unclassified observations. **	
+
+```{r}
+set.seed(702)
+mod.final <- glm(Species~Width+Height, data = dat.trn, family = binomial())
+prob <- predict(mod.final,dat.u.fin, type = "response" )
+pred1 <- ifelse(prob > 0.5, "Multiplex","Subterranious")
+a<-table(pred1, 
+         True = dat.u.fin$Species)
+kable(a, 
+      caption = "Rows are Predicted Value and Columns are True Value",
+      col.names = "Frequency")
+
+error1 <- (1- (sum(diag(a)))/sum(a))*100
+paste("Error For model is ", error1, " %")
+```
+
+
+From our model, we can predict that out of 197 unknown samples, there are 82 multiplex data and 115 subterranious data. The error rate of our model is 58.37%.
+
+**Sources**
+
+0. Airoldi, J.-P., B. Flury, M. Salvioni (1996) "Discrimination between two species of Microtus using both classified and unclassified observations" Journal of Theoretical    Biology 177:247-262
+
+1. Histogram: https://www.statmethods.net/graphs/density.html
+
+2. Feature Plot : https://topepo.github.io/caret/visualizations.html
+
+3. Binwidth: https://stackoverflow.com/questions/14200027/how-to-adjust-binwidth-in-ggplot2
+
+4. Boxplot: https://towardsdatascience.com/understanding-boxplots-5e2df7bcbd51
+
+5. https://www.wellbeingatschool.org.nz/information-sheet/understanding-and-interpreting-box-plots
+   
+6. Assumptions of Logistic Regression:https://www.statisticssolutions.com/free-resources/directory-of-statistical-analyses/assumptions-of-logistic-regression/
+
+7. Classification Logistic Regression: https://github.com/cran/sparklyr/blob/c0effdbed11c95e42ea37193b1cfe2516217516b/R/ml_classification_logistic_regression.R
+
+8. 601 Final Project: https://github.com/achalneupane/achalneupane/blob/26d43b15758ded9aeb5d3ae36a05926143697a3c/achalneupane.github.io/post/Stat_601_FINAL.rmd
+
+9. Logistic Regression Slides: https://courses.washington.edu/b513/handouts/b513_2013_2-2x2.pdf
+
+10. Basic Linear Regression : https://www.machinelearningplus.com/machine-learning/logistic-regression-tutorial-examples-r/
+
+11. Confusion Matrix : https://stackoverflow.com/questions/65124061/confusion-matrix-for-a-logistic-model
+
+12. Main Code for Project: https://github.com/AminBaabol/Modern-Applied-Statisitcs-I/blob/c334a0af99caf0dc56c2d4bdaf971aac472436ca/Project/AminBaabol_FinalQ1.Rmd
+
+13. https://rpubs.com/aelhabr/logistic-regression-tutorial
+
+14. Link : https://www.rpubs.com/Quinn_Fargen/STAT701FinalQuinn
+
+15. https://stackoverflow.com/questions/65124061/confusion-matrix-for-a-logistic-model
+
+16. https://www.machinelearningplus.com/machine-learning/logistic-regression-tutorial-examples-r/
+
+17. https://github.com/achalneupane/achalneupane/blob/26d43b15758ded9aeb5d3ae36a05926143697a3c/achalneupane.github.io/post/Stat_601_FINAL.rmd
+
+18. https://github.com/TZstatsADS/spr2017-proj3-group3/blob/8394b05d3176366389265201602a4a18b83d5af7/lib/logistic_Regression_for_all_features.R
+
+
+
+
+
+
+
+
+
+
+
+
